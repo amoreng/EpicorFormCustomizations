@@ -1,0 +1,495 @@
+// **************************************************
+// Custom code for MainController
+// Created: 12/19/2016 4:02:57 PM
+// **************************************************
+using System;
+using System.ComponentModel;
+using System.Data;
+using System.Diagnostics;
+using System.Windows.Forms;
+using Ice.BO;
+using Ice.UI;
+using Ice.Lib;
+using Ice.Adapters;
+using Ice.Lib.Customization;
+using Ice.Lib.ExtendedProps;
+using Ice.Lib.Framework;
+using Ice.Lib.Searches;
+using Ice.UI.FormFunctions;
+using System.Text;
+
+public class Script
+{
+	// ** Wizard Insert Location - Do Not Remove 'Begin/End Wizard Added Module Level Variables' Comments! **
+	// Begin Wizard Added Module Level Variables **
+
+	// End Wizard Added Module Level Variables **
+
+	// Add Custom Module Level Variables Here **
+
+	public void InitializeCustomCode()
+	{
+		// ** Wizard Insert Location - Do not delete 'Begin/End Wizard Added Variable Initialization' lines **
+		// Begin Wizard Added Variable Initialization
+
+		// End Wizard Added Variable Initialization
+
+		// Begin Wizard Added Custom Method Calls
+
+		this.btnGetCode.Click += new System.EventHandler(this.btnGetCode_Click);
+		this.btnReset.Click += new System.EventHandler(this.btnReset_Click);
+		// End Wizard Added Custom Method Calls
+	}
+
+	public void DestroyCustomCode()
+	{
+		// ** Wizard Insert Location - Do not delete 'Begin/End Wizard Added Object Disposal' lines **
+		// Begin Wizard Added Object Disposal
+
+		this.btnGetCode.Click -= new System.EventHandler(this.btnGetCode_Click);
+		this.btnReset.Click -= new System.EventHandler(this.btnReset_Click);
+		// End Wizard Added Object Disposal
+
+		// Begin Custom Code Disposal
+
+		// End Custom Code Disposal
+	}
+	
+	private void btnReset_Click(object sender, System.EventArgs args)
+	{
+		// ** Place Event Handling Code Here **
+		//clear fields
+		txtShipViaCode.Clear();	
+		txtCarrierCode.Clear();	
+		txtServiceCode.Clear();
+		txtBoxCode.Clear();
+		txtIceCode.Clear();
+	}
+
+	private void btnGetCode_Click(object sender, System.EventArgs args)
+	{
+			//local variables to build out Ship Via Code
+		string carrierCode = String.Empty;	
+		string promptService = String.Empty;//used for temp storage
+		string serviceCode = String.Empty;
+		string boxCode = String.Empty;		
+		string dryIce = String.Empty;
+		StringBuilder builder = new StringBuilder();
+
+		//call carrier class
+		string promptCarrier = CarrierPrompt.ShowDialog(oTrans,"Choose Carrier:", "Choose Carrier");
+		txtCarrierCode.Text = promptCarrier;	
+		if(!String.IsNullOrEmpty(promptCarrier))
+		{
+			//switch on carrier and prompt service options
+			switch (promptCarrier)
+			{
+				case "F":							
+					promptService = FedExServicePrompt.ShowDialog(oTrans,"Choose Service Option:", "Choose FedEx Service");
+					//Mutators : when service code ends in 0, change carrierCode to "G" and trim service option code.
+					if(!String.IsNullOrEmpty(promptService))
+					{
+						if(promptService.Length >1)
+						{	
+							carrierCode = "G";	
+							serviceCode = promptService.Substring(0,1); //trim the 0 off the code
+							builder.Append(carrierCode).Append(serviceCode);
+						}	
+						else
+						{
+							carrierCode = "F";
+							serviceCode = promptService;
+							builder.Append(carrierCode).Append(serviceCode);				
+						}	
+						//MessageBox.Show(builder.ToString());						
+					}
+					break;
+				case "U":
+					promptService = UPSServicePrompt.ShowDialog(oTrans,"Choose Service Option:", "Choose UPS Service");
+					if(!String.IsNullOrEmpty(promptService))
+					{
+						carrierCode = "U";
+						serviceCode = promptService;
+						builder.Append(carrierCode).Append(serviceCode);
+						//MessageBox.Show(builder.ToString());	
+					}						
+					break;
+				case "M":
+					promptService = MiscServicePrompt.ShowDialog(oTrans,"Choose Service Option:", "Choose Miscellaneous Service");
+					if(!String.IsNullOrEmpty(promptService))
+					{
+						carrierCode = "M";
+						serviceCode = promptService;
+						builder.Append(carrierCode).Append(serviceCode);	
+						//MessageBox.Show(builder.ToString());
+					}						
+					break;
+				case "C":
+					promptService = CourierServicePrompt.ShowDialog(oTrans,"Choose Service Option:", "Choose Courier Service");
+					if(!String.IsNullOrEmpty(promptService))
+					{
+						carrierCode = "C";
+						serviceCode = promptService;
+						builder.Append(carrierCode).Append(serviceCode);	
+						//MessageBox.Show(builder.ToString());
+					}						
+					break;					
+			}
+			txtCarrierCode.Text = carrierCode;
+			txtServiceCode.Text = serviceCode;
+			if(!String.IsNullOrEmpty(promptService))
+			{
+				//dry ice check,if yes, proceed to box class, if no, set boxCode to 00. 
+				dryIce = DryIcePrompt.ShowDialog(oTrans,"Choose Dry Ice Option:", "Choose Dry Ice Option");
+				txtIceCode.Text = dryIce;
+				if(!String.IsNullOrEmpty(dryIce))
+				{
+					switch(dryIce)
+					{
+						case "Yes":
+							boxCode = BoxTypePrompt.ShowDialog(oTrans,"Choose Box Option:", "Choose Box Option");
+							builder.Append(boxCode);
+							txtBoxCode.Text = boxCode;
+							break;
+						case "No":
+							boxCode = "00";
+							builder.Append(boxCode);
+							txtBoxCode.Text = boxCode;						
+							break;
+					}
+					//MessageBox.Show(builder.ToString());
+					//set final ship via code field value here
+					txtShipViaCode.Text = builder.ToString();
+				}
+			}
+		}
+	}
+}
+public static class CarrierPrompt
+{
+	private static DataTable dtCarrier;
+    public static string ShowDialog(object oTrans, string text, string caption)
+    {
+	
+        Form prompt = new Form()
+        {
+            Width = 350,
+            Height = 175,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            Text = caption,
+            StartPosition = FormStartPosition.CenterScreen
+        };
+        Label textLabel = new Label() { Left = 50, Top=20, Text= text };
+        //TextBox textBox = new TextBox() { Left = 50, Top=50, Width=400 };	
+		//this is the combo for carrier
+		ComboBox comboCarrier = new ComboBox() { Left = 50, Top=50, Width=250 };
+        Button confirmation = new Button() { Text = "Next...", Left=50, Width=100, Top=75, DialogResult = DialogResult.OK };
+		Button cancel = new Button() { Text = "Cancel", Left=155, Width=100, Top=75, DialogResult = DialogResult.Cancel}; //TODO cancel key
+        confirmation.Click += (sender, e) => { prompt.Close(); };
+       // prompt.Controls.Add(textBox);
+		prompt.Controls.Add(comboCarrier);
+        prompt.Controls.Add(confirmation);	
+		prompt.Controls.Add(cancel);
+        prompt.Controls.Add(textLabel);
+        prompt.AcceptButton = confirmation;
+		
+		//call UserCodes adapter and filter it
+		UserCodesAdapter adapterUserCodes = new UserCodesAdapter(oTrans);
+		adapterUserCodes.BOConnect();
+		SearchOptions opts = new SearchOptions(SearchMode.AutoSearch);
+		opts.PreLoadSearchFilter = "CodeTypeID = 'Carrier'";
+		opts.DataSetMode=DataSetMode.RowsDataSet;
+		adapterUserCodes.InvokeSearch(opts);
+			
+		dtCarrier = adapterUserCodes.UserCodesData.UDCodes;
+
+		comboCarrier.DataSource = dtCarrier;
+		comboCarrier.DisplayMember = "LongDesc";
+		comboCarrier.ValueMember = "CodeDesc";
+	
+		//show user results and pass code ID
+        return prompt.ShowDialog() == DialogResult.OK ? comboCarrier.SelectedValue.ToString() : "";	
+		//cleanup adapter
+		adapterUserCodes.Dispose();
+    }
+
+}
+
+public static class FedExServicePrompt
+{
+	private static DataTable dtSerivceOption;
+    public static string ShowDialog(object oTrans, string text, string caption)
+    {
+	
+        Form prompt = new Form()
+        {
+            Width = 350,
+            Height = 175,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            Text = caption, 
+            StartPosition = FormStartPosition.CenterScreen
+        };
+        Label textLabel = new Label() { Left = 50, Top=20, Text= text };
+        //TextBox textBox = new TextBox() { Left = 50, Top=50, Width=400 };	
+		//this is the combo for carrier
+		ComboBox comboService = new ComboBox() { Left = 50, Top=50, Width=250 };
+        Button confirmation = new Button() { Text = "Next...", Left=50, Width=100, Top=75, DialogResult = DialogResult.OK };
+		Button cancel = new Button() { Text = "Cancel", Left=155, Width=100, Top=75, DialogResult = DialogResult.Cancel}; //150, 75
+        confirmation.Click += (sender, e) => { prompt.Close(); };
+       // prompt.Controls.Add(textBox);
+		prompt.Controls.Add(comboService);
+        prompt.Controls.Add(confirmation);	
+		prompt.Controls.Add(cancel);
+        prompt.Controls.Add(textLabel);
+        prompt.AcceptButton = confirmation;
+		
+		//call UserCodes adapter and filter it
+		UserCodesAdapter adapterUserCodes = new UserCodesAdapter(oTrans);
+		adapterUserCodes.BOConnect();
+		SearchOptions opts = new SearchOptions(SearchMode.AutoSearch);
+		opts.PreLoadSearchFilter = "CodeTypeID = 'FedExOpts'";
+		opts.DataSetMode=DataSetMode.RowsDataSet;
+		adapterUserCodes.InvokeSearch(opts);
+			
+		dtSerivceOption = adapterUserCodes.UserCodesData.UDCodes;
+
+		comboService.DataSource = dtSerivceOption;
+		comboService.DisplayMember = "LongDesc";
+		comboService.ValueMember = "CodeDesc";
+	
+		//show user results and pass code ID
+        return prompt.ShowDialog() == DialogResult.OK ? comboService.SelectedValue.ToString() : "";	
+		//cleanup adapter
+		adapterUserCodes.Dispose();
+    }
+}
+
+public static class UPSServicePrompt
+{
+	private static DataTable dtSerivceOption;
+    public static string ShowDialog(object oTrans, string text, string caption)
+    {
+	
+        Form prompt = new Form()
+        {
+            Width = 350,
+            Height = 175,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            Text = caption,
+            StartPosition = FormStartPosition.CenterScreen
+        };
+        Label textLabel = new Label() { Left = 50, Top=20, Text= text };
+        //TextBox textBox = new TextBox() { Left = 50, Top=50, Width=400 };	
+		//this is the combo for carrier
+		ComboBox comboService = new ComboBox() { Left = 50, Top=50, Width=250 };
+        Button confirmation = new Button() { Text = "Next...", Left=50, Width=100, Top=75, DialogResult = DialogResult.OK };
+		Button cancel = new Button() { Text = "Cancel", Left=155, Width=100, Top=75, DialogResult = DialogResult.Cancel}; 
+        confirmation.Click += (sender, e) => { prompt.Close(); };
+       // prompt.Controls.Add(textBox);
+		prompt.Controls.Add(comboService);
+        prompt.Controls.Add(confirmation);	
+		prompt.Controls.Add(cancel);
+        prompt.Controls.Add(textLabel);
+        prompt.AcceptButton = confirmation;
+		
+		//call UserCodes adapter and filter it
+		UserCodesAdapter adapterUserCodes = new UserCodesAdapter(oTrans);
+		adapterUserCodes.BOConnect();
+		SearchOptions opts = new SearchOptions(SearchMode.AutoSearch);
+		opts.PreLoadSearchFilter = "CodeTypeID = 'UPSOpts'";
+		opts.DataSetMode=DataSetMode.RowsDataSet;
+		adapterUserCodes.InvokeSearch(opts);
+			
+		dtSerivceOption = adapterUserCodes.UserCodesData.UDCodes;
+
+		comboService.DataSource = dtSerivceOption;
+		comboService.DisplayMember = "LongDesc";
+		comboService.ValueMember = "CodeDesc";
+	
+		//show user results and pass code ID
+        return prompt.ShowDialog() == DialogResult.OK ? comboService.SelectedValue.ToString() : "";	
+		//cleanup adapter
+		adapterUserCodes.Dispose();
+    }
+}
+	
+public static class MiscServicePrompt
+{
+	private static DataTable dtSerivceOption;
+    public static string ShowDialog(object oTrans, string text, string caption)
+    {
+	
+        Form prompt = new Form()
+        {
+            Width = 350,
+            Height = 175,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            Text = caption, 
+            StartPosition = FormStartPosition.CenterScreen
+        };
+        Label textLabel = new Label() { Left = 50, Top=20, Text= text };
+        //TextBox textBox = new TextBox() { Left = 50, Top=50, Width=400 };	
+		//this is the combo for carrier
+		ComboBox comboService = new ComboBox() { Left = 50, Top=50, Width=250 };
+        Button confirmation = new Button() { Text = "Next...", Left=50, Width=100, Top=75, DialogResult = DialogResult.OK };
+		Button cancel = new Button() { Text = "Cancel", Left=155, Width=100, Top=75, DialogResult = DialogResult.Cancel}; 
+        confirmation.Click += (sender, e) => { prompt.Close(); };
+       // prompt.Controls.Add(textBox);
+		prompt.Controls.Add(comboService);
+        prompt.Controls.Add(confirmation);	
+		prompt.Controls.Add(cancel);
+        prompt.Controls.Add(textLabel);
+        prompt.AcceptButton = confirmation;
+		
+		//call UserCodes adapter and filter it
+		UserCodesAdapter adapterUserCodes = new UserCodesAdapter(oTrans);
+		adapterUserCodes.BOConnect();
+		SearchOptions opts = new SearchOptions(SearchMode.AutoSearch);
+		opts.PreLoadSearchFilter = "CodeTypeID = 'MiscOpts'";
+		opts.DataSetMode=DataSetMode.RowsDataSet;
+		adapterUserCodes.InvokeSearch(opts);
+			
+		dtSerivceOption = adapterUserCodes.UserCodesData.UDCodes;
+
+		comboService.DataSource = dtSerivceOption;
+		comboService.DisplayMember = "LongDesc";
+		comboService.ValueMember = "CodeDesc";
+	
+		//show user results and pass code ID
+        return prompt.ShowDialog() == DialogResult.OK ? comboService.SelectedValue.ToString() : "";	
+		//cleanup adapter
+		adapterUserCodes.Dispose();
+    }
+}
+
+public static class CourierServicePrompt
+{
+	private static DataTable dtSerivceOption;
+    public static string ShowDialog(object oTrans, string text, string caption)
+    {
+	
+        Form prompt = new Form()
+        {
+            Width = 350,
+            Height = 175,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            Text = caption, 
+            StartPosition = FormStartPosition.CenterScreen
+        };
+        Label textLabel = new Label() { Left = 50, Top=20, Text= text };
+        //TextBox textBox = new TextBox() { Left = 50, Top=50, Width=400 };	
+		//this is the combo for carrier
+		ComboBox comboService = new ComboBox() { Left = 50, Top=50, Width=250 };
+        Button confirmation = new Button() { Text = "Next...", Left=50, Width=100, Top=75, DialogResult = DialogResult.OK };
+		Button cancel = new Button() { Text = "Cancel", Left=155, Width=100, Top=75, DialogResult = DialogResult.Cancel}; 
+        confirmation.Click += (sender, e) => { prompt.Close(); };
+       // prompt.Controls.Add(textBox);
+		prompt.Controls.Add(comboService);
+        prompt.Controls.Add(confirmation);	
+		prompt.Controls.Add(cancel);
+        prompt.Controls.Add(textLabel);
+        prompt.AcceptButton = confirmation;
+		
+		//call UserCodes adapter and filter it
+		UserCodesAdapter adapterUserCodes = new UserCodesAdapter(oTrans);
+		adapterUserCodes.BOConnect();
+		SearchOptions opts = new SearchOptions(SearchMode.AutoSearch);
+		opts.PreLoadSearchFilter = "CodeTypeID = 'CourierOpt'";//notice no "Opts", too short for field length :P
+		opts.DataSetMode=DataSetMode.RowsDataSet;
+		adapterUserCodes.InvokeSearch(opts);
+			
+		dtSerivceOption = adapterUserCodes.UserCodesData.UDCodes;
+
+		comboService.DataSource = dtSerivceOption;
+		comboService.DisplayMember = "LongDesc";
+		comboService.ValueMember = "CodeDesc";
+	
+		//show user results and pass code ID
+        return prompt.ShowDialog() == DialogResult.OK ? comboService.SelectedValue.ToString() : "";	
+		//cleanup adapter
+		adapterUserCodes.Dispose();
+    }
+}
+
+public static class DryIcePrompt
+{	
+    public static string ShowDialog(object oTrans, string text, string caption)
+    {
+	
+        Form prompt = new Form()
+        {
+            Width = 350,
+            Height = 175,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            Text = caption, 
+            StartPosition = FormStartPosition.CenterScreen
+        };
+        Label textLabel = new Label() { Left = 50, Top=20, Text= text };
+        //TextBox textBox = new TextBox() { Left = 50, Top=50, Width=400 };	
+		//this is the combo for carrier
+		ComboBox comboService = new ComboBox() { Left = 50, Top=50, Width=250 };
+        Button confirmation = new Button() { Text = "Next...", Left=50, Width=100, Top=75, DialogResult = DialogResult.OK };
+		Button cancel = new Button() { Text = "Cancel", Left=155, Width=100, Top=75, DialogResult = DialogResult.Cancel}; 
+        confirmation.Click += (sender, e) => { prompt.Close(); };
+       // prompt.Controls.Add(textBox);
+		prompt.Controls.Add(comboService);
+        prompt.Controls.Add(confirmation);	
+		prompt.Controls.Add(cancel);
+        prompt.Controls.Add(textLabel);
+        prompt.AcceptButton = confirmation;	
+	
+		String[] yesNoArray = {"Yes", "No"};
+		comboService.DataSource = yesNoArray;
+		//show user results and pass code ID
+        return prompt.ShowDialog() == DialogResult.OK ? comboService.SelectedValue.ToString() : "";	
+    }
+}
+
+public static class BoxTypePrompt
+{
+	private static DataTable dtSerivceOption;
+    public static string ShowDialog(object oTrans, string text, string caption)
+    {
+	
+        Form prompt = new Form()
+        {
+            Width = 350,
+            Height = 175,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            Text = caption,
+            StartPosition = FormStartPosition.CenterScreen
+        };
+        Label textLabel = new Label() { Left = 50, Top=20, Text= text };
+        //TextBox textBox = new TextBox() { Left = 50, Top=50, Width=400 };	
+		//this is the combo for carrier
+		ComboBox comboService = new ComboBox() { Left = 50, Top=50, Width=250 };
+        Button confirmation = new Button() { Text = "Next...", Left=50, Width=100, Top=75, DialogResult = DialogResult.OK };
+		Button cancel = new Button() { Text = "Cancel", Left=155, Width=100, Top=75, DialogResult = DialogResult.Cancel}; 
+        confirmation.Click += (sender, e) => { prompt.Close(); };
+       // prompt.Controls.Add(textBox);
+		prompt.Controls.Add(comboService);
+        prompt.Controls.Add(confirmation);	
+		prompt.Controls.Add(cancel);
+        prompt.Controls.Add(textLabel);
+        prompt.AcceptButton = confirmation;
+		
+		//call UserCodes adapter and filter it
+		UserCodesAdapter adapterUserCodes = new UserCodesAdapter(oTrans);
+		adapterUserCodes.BOConnect();
+		SearchOptions opts = new SearchOptions(SearchMode.AutoSearch);
+		opts.PreLoadSearchFilter = "CodeTypeID = 'BoxOpts'";
+		opts.DataSetMode=DataSetMode.RowsDataSet;
+		adapterUserCodes.InvokeSearch(opts);
+			
+		dtSerivceOption = adapterUserCodes.UserCodesData.UDCodes;
+
+		comboService.DataSource = dtSerivceOption;
+		comboService.DisplayMember = "LongDesc";
+		comboService.ValueMember = "CodeDesc";
+	
+		//show user results and pass code ID
+        return prompt.ShowDialog() == DialogResult.OK ? comboService.SelectedValue.ToString() : "";	
+		//cleanup adapter
+		adapterUserCodes.Dispose();
+    }
+}
