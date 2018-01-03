@@ -1,0 +1,191 @@
+// **************************************************
+// Custom code for InspectionProcessingEntryForm
+// Created: 12/5/2017 11:39:08 AM
+// Modified: 12/5/17 AMM
+// Add custom tool to actions menu that allows one to search by special parameters
+// **************************************************
+using System;
+using System.ComponentModel;
+using System.Data;
+using System.Diagnostics;
+using System.Windows.Forms;
+using Erp.Adapters;
+using Erp.UI;
+using Ice.Lib;
+using Ice.Adapters;
+using Ice.Lib.Customization;
+using Ice.Lib.ExtendedProps;
+using Ice.Lib.Framework;
+using Ice.Lib.Searches;
+using Ice.UI.FormFunctions;
+using System.Collections;
+using System.Collections.Generic;
+
+public class Script
+{
+	// ** Wizard Insert Location - Do Not Remove 'Begin/End Wizard Added Module Level Variables' Comments! **
+	// Begin Wizard Added Module Level Variables **
+
+	private EpiDataView edvporView;
+	private EpiDataView edvuiView;
+	
+	// End Wizard Added Module Level Variables **
+
+	// Add Custom Module Level Variables Here **
+	private ReceiptAdapter adapterReceipt;
+
+	public void InitializeCustomCode()
+	{
+		// ** Wizard Insert Location - Do not delete 'Begin/End Wizard Added Variable Initialization' lines **
+		// Begin Wizard Added Variable Initialization
+
+		this.InspectionProcessingEntryForm.BeforeToolClick += new Ice.Lib.Framework.BeforeToolClickEventHandler(this.InspectionProcessingEntryForm_BeforeToolClick);
+		this.edvporView = ((EpiDataView)(this.oTrans.EpiDataViews["porView"]));
+
+		this.edvuiView = ((EpiDataView)(this.oTrans.EpiDataViews["uiView"]));
+
+		// End Wizard Added Variable Initialization
+
+		// Begin Wizard Added Custom Method Calls
+
+		// End Wizard Added Custom Method Calls
+		
+	}
+	
+	public void DestroyCustomCode()
+	{
+		// ** Wizard Insert Location - Do not delete 'Begin/End Wizard Added Object Disposal' lines **
+		// Begin Wizard Added Object Disposal
+
+		this.InspectionProcessingEntryForm.BeforeToolClick -= new Ice.Lib.Framework.BeforeToolClickEventHandler(this.InspectionProcessingEntryForm_BeforeToolClick);
+		
+		this.edvporView = null;
+
+		this.edvuiView = null;
+		// End Wizard Added Object Disposal
+
+		// Begin Custom Code Disposal
+
+		// End Custom Code Disposal
+	
+	}
+
+	//custom tools
+	public void AddCustomTool()
+	{
+		if(!baseToolbarsManager.Tools.Exists("ActionsMenu")) return;
+		var actionsMenu = baseToolbarsManager.Tools["ActionsMenu"] as Infragistics.Win.UltraWinToolbars.PopupMenuTool;
+		if(actionsMenu==null) return;
+		var tool = new Infragistics.Win.UltraWinToolbars.ButtonTool("Disposition Fresh Donor Lots");
+		tool.SharedProps.Caption = "Disposition Fresh Donor Lots";
+		baseToolbarsManager.Tools.Add(tool);
+		actionsMenu.Tools.Add(tool);
+		actionsMenu.Tools[tool.Key].InstanceProps.IsFirstInGroup = false;		
+	}
+
+	//Launch special search form	
+
+	private void InspectionProcessingEntryForm_BeforeToolClick(object sender, Ice.Lib.Framework.BeforeToolClickEventArgs args)
+	{
+		if(args.Tool.Key == "Disposition Fresh Donor Lots")
+		{
+			//launch special search //TODO
+			object ret = ProcessCaller.InvokeAdapterMethod
+						(oTrans.EpiBaseForm, "QuickSearchAdapter", "ShowQuickSearchForm", new object[] 
+						{oTrans.EpiBaseForm, "SearchByDonor", true/* multi-select */, new DataTable() });
+			  
+			// user cancelled
+			if (ret == null) return;			
+			ArrayList list = (ArrayList)ret;			
+			
+			//Return type is a calculated field, which is PackNum + ~ + VendorID
+			
+			//Handle Multiple Pack Slips
+			for(int i = 0; i<list.Count; i++)
+			{
+				string  pcPurPoint = string.Empty; 
+				string pcPackSlip = string.Empty;
+				int piVendorNum = 0;
+				
+				string value = list[i].ToString();
+				char delimiter = '~';
+				string[] substrings = value.Split(delimiter);
+				//set variables, first index is pack slip, second index is vendor num
+				pcPackSlip = substrings[0];
+				piVendorNum = Convert.ToInt32(substrings[1]);				
+
+				//Find PO Receipt Data by Donor Number as Pack Slip			
+				adapterReceipt = new ReceiptAdapter(oTrans);
+				adapterReceipt.BOConnect();
+				
+				var adapterInsp = ((InspProcessingAdapter)(this.csm.TransAdaptersHT["oTrans_inspAdapter"]));			
+				
+				//call a get by ID method and return all dtl within a specific pack slip
+				bool result = adapterReceipt.GetByID(piVendorNum, "", pcPackSlip);
+				if(result)
+				{	
+					//Find RcvDtl records that haven't been received yet (InspectionPending = false)
+					
+					//create list to store InspectionPending records line numbers
+					List<int> inspPending = new List<int>();
+					//Find RcvDtl records that haven't been received yet (InspectionPending = true)
+					int index = 0;
+					foreach(DataRow row in adapterReceipt.ReceiptData.RcvDtl)
+					{
+						if(adapterReceipt.ReceiptData.RcvDtl[index].InspectionPending)
+						{
+							inspPending.Add(adapterReceipt.ReceiptData.RcvDtl[index].PackLine);
+						}
+						index++;
+					}
+					//if no records waiting to be inspected, exit method
+					if(inspPending.Count==0)
+					{
+						MessageBox.Show(string.Format("Pack {0} has no Inspection Pending Receipt Detail records.", pcPackSlip));
+						return;
+					}
+
+					//copy list to array for easy index crawling
+					int piPackLine = 0;
+					int[] array = new int[inspPending.Count];
+					inspPending.CopyTo(array);
+					
+					foreach(int line in array)
+					{
+						piPackLine = line;
+						adapterInsp.GetReceiptByID(piVendorNum, "",pcPackSlip,piPackLine); 
+						oTrans.NotifyAll();			
+					}
+					
+//					foreach(DataRow row in adapterReceipt.ReceiptData.RcvDtl)
+//					{
+//						//loop thru receipt detail records
+//						if(inspPending.Contains(adapterReceipt.ReceiptData.RcvDtl[index].PackLine))
+//						adapterInsp.GetReceiptByID(piVendorNum, "",pcPackSlip,piPackLine); 
+//						oTrans.NotifyAll();				
+//						piPackLine++;
+//					}					
+					oTrans.NotifyAll();
+					oTrans.NotifyAll(EpiTransaction.NotifyType.Initialize, edvporView);
+					Erp.UI.Controls.Combos.InspectrCombo cmb = (Erp.UI.Controls.Combos.InspectrCombo)csm.GetNativeControlReference("fd9fe6a9-c62e-4a1e-86cf-57f55bb73815");
+					cmb.Focus();
+				}
+				else 
+					MessageBox.Show("Unable to find Pack Slip...");
+				adapterReceipt.Dispose();
+			}
+		}
+	}
+
+
+	private void InspectionProcessingEntryForm_Load(object sender, EventArgs args)
+	{
+		// Add Event Handler Code
+		InspectionProcessingEntryForm.StartPosition = FormStartPosition.CenterScreen;
+		AddCustomTool();
+	}	
+
+}
+
+
+
