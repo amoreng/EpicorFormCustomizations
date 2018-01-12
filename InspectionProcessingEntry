@@ -4,6 +4,14 @@
 // Modified: 12/5/17 AMM
 // Add custom tool to actions menu that allows one to search by special parameters
 // **************************************************
+
+extern alias Erp_Contracts_BO_InspProcessing;
+extern alias Erp_Contracts_BO_DMRProcessing;
+extern alias Erp_Contracts_BO_Receipt;
+extern alias Erp_Contracts_BO_SupplierXRef;
+extern alias Erp_Adapters_InspProcessing;
+extern alias Erp_Adapters_PO;
+
 using System;
 using System.ComponentModel;
 using System.Data;
@@ -28,7 +36,8 @@ public class Script
 
 	private EpiDataView edvporView;
 	private EpiDataView edvuiView;
-	
+
+	private EpiDataView edvinvView;
 	// End Wizard Added Module Level Variables **
 
 	// Add Custom Module Level Variables Here **
@@ -41,8 +50,12 @@ public class Script
 
 		this.InspectionProcessingEntryForm.BeforeToolClick += new Ice.Lib.Framework.BeforeToolClickEventHandler(this.InspectionProcessingEntryForm_BeforeToolClick);
 		this.edvporView = ((EpiDataView)(this.oTrans.EpiDataViews["porView"]));
+		
 
 		this.edvuiView = ((EpiDataView)(this.oTrans.EpiDataViews["uiView"]));
+
+		
+		this.edvinvView = ((EpiDataView)(this.oTrans.EpiDataViews["invView"]));
 
 		// End Wizard Added Variable Initialization
 
@@ -60,8 +73,11 @@ public class Script
 		this.InspectionProcessingEntryForm.BeforeToolClick -= new Ice.Lib.Framework.BeforeToolClickEventHandler(this.InspectionProcessingEntryForm_BeforeToolClick);
 		
 		this.edvporView = null;
-
+		
 		this.edvuiView = null;
+		
+
+		this.edvinvView = null;
 		// End Wizard Added Object Disposal
 
 		// Begin Custom Code Disposal
@@ -71,25 +87,36 @@ public class Script
 	}
 
 	//custom tools
-	public void AddCustomTool()
+	public void AddPOReceiptTool()
 	{
 		if(!baseToolbarsManager.Tools.Exists("ActionsMenu")) return;
 		var actionsMenu = baseToolbarsManager.Tools["ActionsMenu"] as Infragistics.Win.UltraWinToolbars.PopupMenuTool;
 		if(actionsMenu==null) return;
-		var tool = new Infragistics.Win.UltraWinToolbars.ButtonTool("Disposition Fresh Donor Lots");
-		tool.SharedProps.Caption = "Disposition Fresh Donor Lots";
+		var tool = new Infragistics.Win.UltraWinToolbars.ButtonTool("Disposition Misc. Receipt");
+		tool.SharedProps.Caption = "Disposition Misc. Receipt";
 		baseToolbarsManager.Tools.Add(tool);
 		actionsMenu.Tools.Add(tool);
 		actionsMenu.Tools[tool.Key].InstanceProps.IsFirstInGroup = false;		
 	}
 
+	public void AddInventoryNonConformanceTool()
+	{
+		if(!baseToolbarsManager.Tools.Exists("ActionsMenu")) return;
+		var actionsMenu = baseToolbarsManager.Tools["ActionsMenu"] as Infragistics.Win.UltraWinToolbars.PopupMenuTool;
+		if(actionsMenu==null) return;
+		var tool = new Infragistics.Win.UltraWinToolbars.ButtonTool("Disposition Inventory Non-Conformance");
+		tool.SharedProps.Caption = "Disposition Inventory Non-Conformance";
+		baseToolbarsManager.Tools.Add(tool);
+		actionsMenu.Tools.Add(tool);
+		actionsMenu.Tools[tool.Key].InstanceProps.IsFirstInGroup = false;		
+	}
 	//Launch special search form	
 
 	private void InspectionProcessingEntryForm_BeforeToolClick(object sender, Ice.Lib.Framework.BeforeToolClickEventArgs args)
 	{
-		if(args.Tool.Key == "Disposition Fresh Donor Lots")
+		if(args.Tool.Key == "Disposition Misc. Receipt")
 		{
-			//launch special search //TODO
+			//launch special search to retrieve pending PO receipts by Donor Number
 			object ret = ProcessCaller.InvokeAdapterMethod
 						(oTrans.EpiBaseForm, "QuickSearchAdapter", "ShowQuickSearchForm", new object[] 
 						{oTrans.EpiBaseForm, "SearchByDonor", true/* multi-select */, new DataTable() });
@@ -156,15 +183,7 @@ public class Script
 						adapterInsp.GetReceiptByID(piVendorNum, "",pcPackSlip,piPackLine); 
 						oTrans.NotifyAll();			
 					}
-					
-//					foreach(DataRow row in adapterReceipt.ReceiptData.RcvDtl)
-//					{
-//						//loop thru receipt detail records
-//						if(inspPending.Contains(adapterReceipt.ReceiptData.RcvDtl[index].PackLine))
-//						adapterInsp.GetReceiptByID(piVendorNum, "",pcPackSlip,piPackLine); 
-//						oTrans.NotifyAll();				
-//						piPackLine++;
-//					}					
+		
 					oTrans.NotifyAll();
 					oTrans.NotifyAll(EpiTransaction.NotifyType.Initialize, edvporView);
 					Erp.UI.Controls.Combos.InspectrCombo cmb = (Erp.UI.Controls.Combos.InspectrCombo)csm.GetNativeControlReference("fd9fe6a9-c62e-4a1e-86cf-57f55bb73815");
@@ -175,15 +194,46 @@ public class Script
 				adapterReceipt.Dispose();
 			}
 		}
-	}
+		if(args.Tool.Key == "Disposition Inventory Non-Conformance")
+		{
+		
+			//launch special search by Donor Number to retreive any non-conformance lots associated. Return value is NonConf.TranID
+			object ret = ProcessCaller.InvokeAdapterMethod
+						(oTrans.EpiBaseForm, "QuickSearchAdapter", "ShowQuickSearchForm", new object[] 
+						{oTrans.EpiBaseForm, "SearchNonConformByDonor", true/* multi-select */, new DataTable() });
+			// user cancelled
+			if (ret == null) return;		
+			
+			ArrayList list = (ArrayList)ret;		
+			//Return value is NonConf.TranID
+			//Add each returned value from list into a real adapter, then will pass dataset into a native adapter method			
+			var adapterInsp = ((InspProcessingAdapter)(this.csm.TransAdaptersHT["oTrans_inspAdapter"])); //native adapter
 
+			for(int i=0;i<list.Count;i++)
+			{
+				string value = list[i].ToString();
+				int convertValue = Convert.ToInt32(value);
+
+				adapterInsp.GetByID(convertValue);
+
+				oTrans.NotifyAll();
+				oTrans.NotifyAll(EpiTransaction.NotifyType.Initialize, edvinvView);
+			}		
+			oTrans.NotifyAll();
+			oTrans.NotifyAll(EpiTransaction.NotifyType.Initialize, edvinvView);	
+			Erp.UI.Controls.Combos.InspectrCombo cmb = (Erp.UI.Controls.Combos.InspectrCombo)csm.GetNativeControlReference("69eac31b-3e9c-4e3f-9962-45220b10f738");
+			cmb.Focus();
+		}
+	}
 
 	private void InspectionProcessingEntryForm_Load(object sender, EventArgs args)
 	{
 		// Add Event Handler Code
 		InspectionProcessingEntryForm.StartPosition = FormStartPosition.CenterScreen;
-		AddCustomTool();
+		AddPOReceiptTool();
+		AddInventoryNonConformanceTool();
 	}	
+
 
 }
 
